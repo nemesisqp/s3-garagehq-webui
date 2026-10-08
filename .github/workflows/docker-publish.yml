@@ -62,7 +62,7 @@ jobs:
 
       # 1. Add QEMU to emulate arm64 instructions during build
       - name: Set up QEMU
-        uses: docker/setup-qemu-action@v3
+        uses: docker/setup-qemu-action@v4
 
       # 2. Set up Buildx
       - name: Set up Docker Buildx

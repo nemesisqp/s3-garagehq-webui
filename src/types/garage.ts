@@ -11,6 +11,7 @@ export type Config = {
   s3_api?: S3API;
   s3_web?: S3Web;
   admin?: Admin;
+  s3_endpoint?: string;
 };
 
 export type Admin = {
@@ -22,6 +23,7 @@ export type Admin = {
 export type S3API = {
   s3_region: string;
   api_bind_addr: string;
+  advertise_endpoint?: string;
   root_domain: string;
 };
 

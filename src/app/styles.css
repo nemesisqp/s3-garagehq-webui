@@ -59,6 +59,15 @@
     @apply bg-background text-foreground overflow-hidden;
   }
 
+  audio {
+    color-scheme: light;
+  }
+
+  .dark audio {
+    color-scheme: dark;
+    filter: invert(1) hue-rotate(180deg);
+  }
+
   /* Browsers force a hardcoded (usually light yellow) autofill background
      that ignores normal background-color — override it via the inset
      box-shadow trick, tied to our theme tokens so it stays dark and matches

@@ -31,7 +31,7 @@ func objectKeys(objects []types.Object) []string {
 	return keys
 }
 
-func TestSearchFolderMatchesNamesInFolderOnly(t *testing.T) {
+func TestSearchFolderMatchesRecursively(t *testing.T) {
 	got, err := searchFolder(context.Background(), photoStore(), "b", "photos/", "BEACH")
 	if err != nil {
 		t.Fatal(err)
@@ -39,18 +39,30 @@ func TestSearchFolderMatchesNamesInFolderOnly(t *testing.T) {
 	if want := []string{"photos/Beaches/"}; !reflect.DeepEqual(got.Prefixes, want) {
 		t.Errorf("prefixes = %v, want %v", got.Prefixes, want)
 	}
-	// Nested photos/archive/old-beach.png is not in this folder; the folder
-	// marker "photos/" has an empty name and never matches.
-	if want := []string{"photos/Beach.JPG", "photos/beach-2.png"}; !reflect.DeepEqual(objectKeys(got.Objects), want) {
-		t.Errorf("objects = %v, want %v", objectKeys(got.Objects), want)
+	// Recursive search matches Beach.JPG, beach-2.png and nested archive/old-beach.png
+	wantObjects := []string{"photos/Beach.JPG", "photos/archive/old-beach.png", "photos/beach-2.png"}
+	if !reflect.DeepEqual(objectKeys(got.Objects), wantObjects) {
+		t.Errorf("objects = %v, want %v", objectKeys(got.Objects), wantObjects)
 	}
 	if got.Truncated {
 		t.Error("truncated = true, want false")
 	}
 }
 
+func TestSearchFolderPreventsShortStrings(t *testing.T) {
+	for _, short := range []string{"", " ", "a", "x"} {
+		got, err := searchFolder(context.Background(), photoStore(), "b", "photos/", short)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(got.Objects) != 0 || len(got.Prefixes) != 0 {
+			t.Errorf("short term %q should return 0 matches, got %d prefixes, %d objects", short, len(got.Prefixes), len(got.Objects))
+		}
+	}
+}
+
 func TestSearchFolderTreatsTermLiterally(t *testing.T) {
-	for _, term := range []string{"(1)", "."} {
+	for _, term := range []string{"(1)", ".png"} {
 		got, err := searchFolder(context.Background(), photoStore(), "b", "photos/", term)
 		if err != nil {
 			t.Fatal(err)
@@ -59,16 +71,16 @@ func TestSearchFolderTreatsTermLiterally(t *testing.T) {
 		if term == "(1)" && !reflect.DeepEqual(keys, []string{"photos/report (1).txt"}) {
 			t.Errorf("term %q matched %v", term, keys)
 		}
-		if term == "." && len(keys) != 4 {
-			t.Errorf("term %q matched %v, want the 4 files with a dot", term, keys)
+		if term == ".png" && len(keys) != 4 {
+			t.Errorf("term %q matched %v, want 4 png files", term, keys)
 		}
 	}
-	got, err := searchFolder(context.Background(), photoStore(), "b", "photos/", "*")
+	got, err := searchFolder(context.Background(), photoStore(), "b", "photos/", "**")
 	if err != nil {
 		t.Fatal(err)
 	}
 	if len(got.Objects)+len(got.Prefixes) != 0 {
-		t.Errorf("term %q matched %v, want nothing", "*", objectKeys(got.Objects))
+		t.Errorf("term %q matched %v, want nothing", "**", objectKeys(got.Objects))
 	}
 }
 

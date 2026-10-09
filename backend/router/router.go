@@ -38,6 +38,7 @@ func HandleApiRouter() *http.ServeMux {
 	router.HandleFunc("GET /buckets", buckets.GetAll)
 
 	browse := &Browse{}
+	router.HandleFunc("POST /browse/{bucket}/presign", browse.PresignObjects)
 	router.HandleFunc("GET /browse/{bucket}", browse.GetObjects)
 	router.HandleFunc("POST /browse/{bucket}", browse.MoveObjects)
 	router.HandleFunc("GET /browse/{bucket}/{key...}", browse.GetOneObject)

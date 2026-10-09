@@ -39,14 +39,18 @@ describe("objectPath", () => {
 describe("previewKind", () => {
   it("detects images, media, pdf and text", () => {
     expect(previewKind("a.PNG")).toBe("image");
+    expect(previewKind("photo.heic")).toBe("image");
+    expect(previewKind("photo.HEIF")).toBe("image");
+    expect(previewKind("graphic.jxl")).toBe("image");
     expect(previewKind("clip", "video/mp4")).toBe("video");
     expect(previewKind("song.mp3")).toBe("audio");
     expect(previewKind("doc.pdf")).toBe("pdf");
-    expect(previewKind("data.json", null, 100)).toBe("text");
+    expect(previewKind("data.json", null)).toBe("text");
   });
-  it("skips text previews for files of 1 MB or more", () => {
-    expect(previewKind("big.log", "text/plain", 1024 * 1024)).toBe("none");
-    expect(previewKind("small.log", "text/plain", 1024 * 1024 - 1)).toBe("text");
+  it("identifies text files for preview", () => {
+    expect(previewKind("big.log", "text/plain")).toBe("text");
+    expect(previewKind("data.csv", "text/csv")).toBe("text");
+    expect(previewKind("small.log", "text/plain")).toBe("text");
   });
   it("falls back to none for unknown types", () => {
     expect(previewKind("archive.zip", "application/zip")).toBe("none");

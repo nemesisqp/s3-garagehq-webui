@@ -1,5 +1,13 @@
-import { useEffect, useRef, useState } from "react";
-import { CircleXIcon, DownloadIcon, Folder, Loader2 } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import {
+  ArrowDown,
+  ArrowUp,
+  ArrowUpDown,
+  CircleXIcon,
+  DownloadIcon,
+  Folder,
+  Loader2,
+} from "lucide-react";
 import { API_URL } from "@/lib/api";
 import { cn, dayjs, readableBytes } from "@/lib/utils";
 import Button from "@/components/ui/button";
@@ -20,9 +28,9 @@ import FileTypeIcon from "./file-type-icon";
 import { useBrowseObjects } from "./hooks";
 import { ObjectContextMenu, ObjectRowMenu } from "./object-menu";
 import { MenuTarget } from "./use-object-menu-items";
+import { usePathSort } from "./use-path-sort";
 
 const PAGE_SIZE = 50;
-const THUMBNAIL_EXTS = ["jpg", "jpeg", "png", "gif"];
 
 type Props = {
   search: string;
@@ -51,6 +59,8 @@ const ObjectList = ({ search, selected, onSelectedChange }: Props) => {
     keys: [],
   });
 
+  const { sortOrder, toggleSort } = usePathSort(bucketName, browse.prefix);
+
   const { data, error, isLoading } = useBrowseObjects(bucketName, {
     prefix: browse.prefix,
     limit: PAGE_SIZE,
@@ -58,16 +68,39 @@ const ObjectList = ({ search, selected, onSelectedChange }: Props) => {
     ...(page > 1 ? { next: cursors[page - 2] } : {}),
   });
 
-  const rows: Row[] = [
-    ...(data?.prefixes || []).map((key) => ({ key, isDir: true })),
-    ...(data?.objects || []).map((o) => ({
+  const rows: Row[] = useMemo(() => {
+    const rawFolders: Row[] = (data?.prefixes || []).map((key) => ({ key, isDir: true }));
+    const rawObjects: Row[] = (data?.objects || []).map((o) => ({
       key: (data?.prefix || "") + o.objectKey,
       isDir: false,
       size: o.size,
       lastModified: o.lastModified,
-    })),
-  ];
-  const allKeys = rows.map((r) => r.key);
+    }));
+
+    if (sortOrder === "none") {
+      return [...rawFolders, ...rawObjects];
+    }
+
+    const sortFn = (a: Row, b: Row) => {
+      const nameA = keyName(a.key);
+      const nameB = keyName(b.key);
+      const cmp = nameA.localeCompare(nameB, undefined, { numeric: true, sensitivity: "base" });
+      return sortOrder === "asc" ? cmp : -cmp;
+    };
+
+    const sortedFolders = [...rawFolders].sort(sortFn);
+    const sortedObjects = [...rawObjects].sort(sortFn);
+
+    return [...sortedFolders, ...sortedObjects];
+  }, [data?.prefixes, data?.objects, data?.prefix, sortOrder]);
+  const allKeys = useMemo(() => rows.map((r) => r.key), [rows]);
+
+  // Reset pagination when search or prefix changes.
+  useEffect(() => {
+    setPage(1);
+    setCursors([]);
+    anchorRef.current = null;
+  }, [search, browse.prefix]);
 
   // Step back if the current page was emptied (e.g. after a bulk delete).
   useEffect(() => {
@@ -75,6 +108,16 @@ const ObjectList = ({ search, selected, onSelectedChange }: Props) => {
       setPage((p) => p - 1);
     }
   }, [data, page, rows.length]);
+
+  // Prune any selected items that are no longer in the table (e.g. filtered by search or navigated away).
+  useEffect(() => {
+    if (!data) return;
+    const allKeysSet = new Set(allKeys);
+    const valid = selected.filter((k) => allKeysSet.has(k));
+    if (valid.length !== selected.length) {
+      onSelectedChange(valid);
+    }
+  }, [data, allKeys, selected, onSelectedChange]);
 
   const onPageChange = (value: number) => {
     if (value > page) {
@@ -121,7 +164,7 @@ const ObjectList = ({ search, selected, onSelectedChange }: Props) => {
   const range = rows.length
     ? `Items ${firstItem}–${firstItem + rows.length - 1}`
     : "No items";
-  const summary = search ? `Results for "${search}" · ${range}` : range;
+  const summary = search ? `Results for "${search}" (recursive) · ${range}` : range;
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
@@ -149,7 +192,29 @@ const ObjectList = ({ search, selected, onSelectedChange }: Props) => {
                   onCheckedChange={toggleAll}
                 />
               </TableHead>
-              <TableHead>Name</TableHead>
+              <TableHead className="p-0">
+                <button
+                  type="button"
+                  onClick={toggleSort}
+                  className="group flex h-10 w-full cursor-pointer items-center gap-1.5 px-3 text-left font-medium text-muted-foreground transition-colors hover:text-foreground select-none"
+                  title={
+                    sortOrder === "asc"
+                      ? "Sorted ascending (A-Z). Click to sort descending."
+                      : sortOrder === "desc"
+                        ? "Sorted descending (Z-A). Click to reset."
+                        : "Click to sort by name"
+                  }
+                >
+                  <span>Name</span>
+                  {sortOrder === "asc" ? (
+                    <ArrowUp className="size-3.5 text-foreground" />
+                  ) : sortOrder === "desc" ? (
+                    <ArrowDown className="size-3.5 text-foreground" />
+                  ) : (
+                    <ArrowUpDown className="size-3.5 opacity-0 group-hover:opacity-60 transition-opacity" />
+                  )}
+                </button>
+              </TableHead>
               <TableHead>Size</TableHead>
               <TableHead>Last Modified</TableHead>
               <TableHead />
@@ -189,6 +254,14 @@ const ObjectList = ({ search, selected, onSelectedChange }: Props) => {
               const isSelected = selected.includes(row.key);
               const flashIndex = flash.keys.indexOf(row.key);
 
+              const relKey = row.key.startsWith(browse.prefix)
+                ? row.key.slice(browse.prefix.length)
+                : row.key;
+              const trimmedRel = row.isDir && relKey.endsWith("/") ? relKey.slice(0, -1) : relKey;
+              const subDir = trimmedRel.includes("/")
+                ? trimmedRel.slice(0, trimmedRel.lastIndexOf("/") + 1)
+                : "";
+
               return (
                 <ObjectContextMenu
                   // A new key restarts the highlight animation.
@@ -221,6 +294,7 @@ const ObjectList = ({ search, selected, onSelectedChange }: Props) => {
                     <td
                       className="cursor-pointer p-3"
                       role="button"
+                      title={search && subDir ? row.key : undefined}
                       onClick={() =>
                         row.isDir
                           ? browse.openFolder(row.key)
@@ -231,10 +305,15 @@ const ObjectList = ({ search, selected, onSelectedChange }: Props) => {
                         {row.isDir ? (
                           <Folder size={20} className="mr-2 shrink-0 text-muted-foreground" />
                         ) : (
-                          <RowIcon name={name} url={url} />
+                          <FileTypeIcon name={name} size={20} className="mr-2 shrink-0 text-muted-foreground" />
                         )}
                         <span className="max-w-[40vw] truncate">{base}</span>
                         {ext ? <span className="text-muted-foreground">{ext}</span> : null}
+                        {search && subDir ? (
+                          <span className="ml-2 max-w-[20vw] truncate text-xs text-muted-foreground/60">
+                            in {subDir}
+                          </span>
+                        ) : null}
                       </span>
                     </td>
                     <td className="whitespace-nowrap p-3">
@@ -276,21 +355,6 @@ const ObjectList = ({ search, selected, onSelectedChange }: Props) => {
       ) : null}
     </div>
   );
-};
-
-const RowIcon = ({ name, url }: { name: string; url: string }) => {
-  const ext = splitExtension(name)[1].slice(1).toLowerCase();
-  if (THUMBNAIL_EXTS.includes(ext)) {
-    return (
-      <img
-        src={url + "?thumb=1"}
-        alt=""
-        loading="lazy"
-        className="mr-2 size-5 shrink-0 overflow-hidden object-cover"
-      />
-    );
-  }
-  return <FileTypeIcon name={name} size={20} className="mr-2 shrink-0 text-muted-foreground" />;
 };
 
 export default ObjectList;

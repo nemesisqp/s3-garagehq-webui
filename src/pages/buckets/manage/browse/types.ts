@@ -32,3 +32,8 @@ export type ObjectInfo = {
   ETag?: string;
   LastModified?: string;
 };
+
+export type PresignResult = {
+  urls: string[];
+  expiresIn: number;
+};

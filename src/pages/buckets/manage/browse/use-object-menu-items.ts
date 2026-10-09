@@ -97,7 +97,13 @@ export const useObjectMenuItems = (target: MenuTarget): MenuItemSpec[] => {
 
   const url = API_URL + objectPath(bucketName, key);
   return [
-    { id: "preview", label: "Preview", icon: Eye, onSelect: () => browse.openPreview(key) },
+    {
+      id: "preview",
+      label: "Preview",
+      icon: Eye,
+      disabled: browse.isPaneOpen,
+      onSelect: () => browse.openPreview(key),
+    },
     {
       id: "open-tab",
       label: "Open in new tab",

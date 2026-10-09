@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { cn } from "@/lib/utils";
 import {
   ArchiveIcon,
@@ -7,6 +8,7 @@ import {
   LayoutDashboard,
   ScrollText,
   UsersRound,
+  X,
 } from "lucide-react";
 import { Link, useLocation } from "react-router-dom";
 import garageLogo from "@/assets/garage-logo.svg";
@@ -34,9 +36,31 @@ const pages: {
   { icon: ScrollText, title: "Logs", path: "/logs", roles: managerRoles },
 ];
 
+const CONTRIBUTION_DISMISSED_KEY = "garage_sidebar_contribution_dismissed";
+
+const isContributionDismissed = () => {
+  try {
+    return localStorage.getItem(CONTRIBUTION_DISMISSED_KEY) === "true";
+  } catch {
+    return false;
+  }
+};
+
 const Sidebar = () => {
   const { pathname } = useLocation();
   const auth = useAuth();
+  const [showContribution, setShowContribution] = useState(
+    () => !isContributionDismissed()
+  );
+
+  const handleDismissContribution = () => {
+    setShowContribution(false);
+    try {
+      localStorage.setItem(CONTRIBUTION_DISMISSED_KEY, "true");
+    } catch {
+      // Storage access may fail in private mode; ignore
+    }
+  };
 
   const visiblePages = pages.filter(
     (page) => !page.roles || (auth.role && page.roles.includes(auth.role))
@@ -84,31 +108,48 @@ const Sidebar = () => {
         </div>
       ) : null}
 
-      <div className="border-t p-3">
-        <a
-          href="https://github.com/khairul169/garage-webui"
-          target="_blank"
-          rel="noreferrer"
-          className="block rounded-lg border bg-muted/40 p-3 transition-colors hover:bg-muted"
-        >
-          <div className="flex items-center gap-2.5">
-            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary text-[11px] font-semibold text-primary-foreground">
-              GB
-            </div>
-            <div className="min-w-0 flex-1">
-              <p className="truncate text-xs font-semibold">Gene T. Bitara</p>
-              <p className="text-[11px] text-muted-foreground">Contributor</p>
-            </div>
-            <Github size={15} className="shrink-0 text-muted-foreground" />
+      {showContribution ? (
+        <div className="border-t p-3">
+          <div className="group relative rounded-lg border bg-muted/40 p-3 transition-colors hover:bg-muted">
+            <button
+              type="button"
+              aria-label="Close contribution section"
+              title="Close"
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                handleDismissContribution();
+              }}
+              className="absolute right-1.5 top-1.5 flex size-5 items-center justify-center rounded text-muted-foreground/60 transition-colors hover:bg-background/80 hover:text-foreground"
+            >
+              <X size={12} />
+            </button>
+            <a
+              href="https://github.com/khairul169/garage-webui"
+              target="_blank"
+              rel="noreferrer"
+              className="block"
+            >
+              <div className="flex items-center gap-2.5 pr-4">
+                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary text-[11px] font-semibold text-primary-foreground">
+                  GB
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-xs font-semibold">Gene T. Bitara</p>
+                  <p className="text-[11px] text-muted-foreground">Contributor</p>
+                </div>
+                <Github size={15} className="shrink-0 text-muted-foreground" />
+              </div>
+              <p className="mt-2 text-[10px] leading-tight text-muted-foreground">
+                A fork of{" "}
+                <span className="font-medium text-foreground">
+                  khairul169/garage-webui
+                </span>
+              </p>
+            </a>
           </div>
-          <p className="mt-2 text-[10px] leading-tight text-muted-foreground">
-            A fork of{" "}
-            <span className="font-medium text-foreground">
-              khairul169/garage-webui
-            </span>
-          </p>
-        </a>
-      </div>
+        </div>
+      ) : null}
     </aside>
   );
 };

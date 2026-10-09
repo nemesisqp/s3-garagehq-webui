@@ -11,6 +11,7 @@ import (
 	"log"
 	"mime"
 	"net/http"
+	"path"
 	"strconv"
 	"strings"
 	"time"
@@ -21,6 +22,15 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/s3/types"
 	"github.com/aws/smithy-go"
 )
+
+func init() {
+	_ = mime.AddExtensionType(".heic", "image/heic")
+	_ = mime.AddExtensionType(".heif", "image/heif")
+	_ = mime.AddExtensionType(".jxl", "image/jxl")
+	_ = mime.AddExtensionType(".webp", "image/webp")
+	_ = mime.AddExtensionType(".avif", "image/avif")
+	_ = mime.AddExtensionType(".mkv", "video/x-matroska")
+}
 
 type Browse struct{}
 
@@ -124,6 +134,13 @@ func (b *Browse) GetOneObject(w http.ResponseWriter, r *http.Request) {
 			}
 			return
 		}
+		if object.ContentType == nil || *object.ContentType == "" || *object.ContentType == "application/octet-stream" || *object.ContentType == "binary/octet-stream" {
+			if ext := path.Ext(key); ext != "" {
+				if detected := mime.TypeByExtension(ext); detected != "" {
+					object.ContentType = aws.String(detected)
+				}
+			}
+		}
 		utils.ResponseSuccess(w, object)
 		return
 	}
@@ -211,8 +228,12 @@ func (b *Browse) PutObject(w http.ResponseWriter, r *http.Request) {
 		Bucket: aws.String(bucket),
 		Key:    aws.String(key),
 	}
-	if contentType := r.Header.Get("Content-Type"); contentType != "" {
+	if contentType := r.Header.Get("Content-Type"); contentType != "" && contentType != "application/octet-stream" {
 		input.ContentType = aws.String(contentType)
+	} else if ext := path.Ext(key); ext != "" {
+		if detected := mime.TypeByExtension(ext); detected != "" {
+			input.ContentType = aws.String(detected)
+		}
 	}
 
 	if isDirectory {
@@ -450,17 +471,29 @@ func getS3Client(bucket string) (*s3.Client, error) {
 func writeObjectHeaders(h http.Header, object *s3.GetObjectOutput, filename string, download bool) int {
 	if download {
 		h.Set("Content-Disposition", mime.FormatMediaType("attachment", map[string]string{"filename": filename}))
+	} else {
+		h.Set("Content-Disposition", mime.FormatMediaType("inline", map[string]string{"filename": filename}))
 	}
 	h.Set("Cache-Control", "max-age=86400")
 	h.Set("Accept-Ranges", "bytes")
 	if object.LastModified != nil {
 		h.Set("Last-Modified", object.LastModified.UTC().Format(http.TimeFormat))
 	}
+	contentType := ""
 	if object.ContentType != nil {
-		h.Set("Content-Type", *object.ContentType)
-	} else {
-		h.Set("Content-Type", "application/octet-stream")
+		contentType = *object.ContentType
 	}
+	if contentType == "" || contentType == "application/octet-stream" || contentType == "binary/octet-stream" {
+		if ext := path.Ext(filename); ext != "" {
+			if detected := mime.TypeByExtension(ext); detected != "" {
+				contentType = detected
+			}
+		}
+	}
+	if contentType == "" {
+		contentType = "application/octet-stream"
+	}
+	h.Set("Content-Type", contentType)
 	if object.ContentLength != nil {
 		h.Set("Content-Length", strconv.FormatInt(*object.ContentLength, 10))
 	}

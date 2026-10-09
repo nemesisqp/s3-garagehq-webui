@@ -26,13 +26,33 @@ export const objectPath = (bucket: string, key: string) =>
 
 export type PreviewKind = "image" | "video" | "audio" | "pdf" | "text" | "none";
 
-/** Text previews only load files under this size... */
-const TEXT_PREVIEW_MAX_SIZE = 1024 * 1024;
-/** ...and only their first 256 KB. */
-export const TEXT_PREVIEW_BYTES = 256 * 1024;
+/** Text previews only read at most 100 KB to avoid crashing on huge files. */
+export const TEXT_PREVIEW_BYTES = 100 * 1024;
+/** Images larger than 3 MB are not auto-previewed to save memory. */
+export const IMAGE_PREVIEW_MAX_SIZE = 3 * 1024 * 1024;
 
-const IMAGE_EXTS = ["jpg", "jpeg", "png", "gif", "webp", "avif", "bmp", "svg"];
-const VIDEO_EXTS = ["mp4", "webm", "ogv", "mov", "m4v"];
+export const IMAGE_EXTS = [
+  "jpg",
+  "jpeg",
+  "jfif",
+  "pjpeg",
+  "pjp",
+  "png",
+  "gif",
+  "webp",
+  "avif",
+  "bmp",
+  "svg",
+  "ico",
+  "cur",
+  "tif",
+  "tiff",
+  "apng",
+  "heic",
+  "heif",
+  "jxl",
+];
+const VIDEO_EXTS = ["mp4", "webm", "ogv", "mov", "m4v", "mkv"];
 const AUDIO_EXTS = ["mp3", "wav", "ogg", "oga", "flac", "m4a", "aac"];
 const TEXT_EXTS = [
   "txt", "md", "markdown", "csv", "tsv", "json", "yaml", "yml", "xml", "log",
@@ -43,8 +63,7 @@ const TEXT_EXTS = [
 /** How the details pane can preview a file. */
 export const previewKind = (
   name: string,
-  contentType?: string | null,
-  size?: number | null
+  contentType?: string | null
 ): PreviewKind => {
   const ext = splitExtension(name)[1].slice(1).toLowerCase();
   const type = contentType?.split(";")[0].trim().toLowerCase() || "";
@@ -54,7 +73,7 @@ export const previewKind = (
   if (type.startsWith("audio/") || AUDIO_EXTS.includes(ext)) return "audio";
   if (type === "application/pdf" || ext === "pdf") return "pdf";
   if (type.startsWith("text/") || type === "application/json" || TEXT_EXTS.includes(ext)) {
-    return size != null && size >= TEXT_PREVIEW_MAX_SIZE ? "none" : "text";
+    return "text";
   }
   return "none";
 };

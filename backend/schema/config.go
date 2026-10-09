@@ -16,9 +16,10 @@ type Admin struct {
 }
 
 type S3API struct {
-	APIBindAddr string `json:"api_bind_addr" toml:"api_bind_addr"`
-	RootDomain  string `json:"root_domain" toml:"root_domain"`
-	S3Region    string `json:"s3_region" toml:"s3_region"`
+	APIBindAddr       string `json:"api_bind_addr" toml:"api_bind_addr"`
+	AdvertiseEndpoint string `json:"advertise_endpoint" toml:"advertise_endpoint"`
+	RootDomain        string `json:"root_domain" toml:"root_domain"`
+	S3Region          string `json:"s3_region" toml:"s3_region"`
 }
 
 type S3Web struct {

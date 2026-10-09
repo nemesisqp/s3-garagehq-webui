@@ -85,4 +85,21 @@ func TestWriteObjectHeaders(t *testing.T) {
 	if got := rec.Header().Get("Content-Disposition"); got != "attachment; filename*=utf-8''%C3%BCn%C3%AF.txt" {
 		t.Errorf("Content-Disposition %q", got)
 	}
+
+	// Inferred mime types for formats like heic and jxl when ContentType is empty or octet-stream
+	heicObj := &s3.GetObjectOutput{
+		ContentType: aws.String("application/octet-stream"),
+	}
+	rec = httptest.NewRecorder()
+	writeObjectHeaders(rec.Header(), heicObj, "photo.heic", false)
+	if got := rec.Header().Get("Content-Type"); got != "image/heic" {
+		t.Errorf("Content-Type %q, want image/heic", got)
+	}
+
+	jxlObj := &s3.GetObjectOutput{}
+	rec = httptest.NewRecorder()
+	writeObjectHeaders(rec.Header(), jxlObj, "graphic.jxl", false)
+	if got := rec.Header().Get("Content-Type"); got != "image/jxl" {
+		t.Errorf("Content-Type %q, want image/jxl", got)
+	}
 }

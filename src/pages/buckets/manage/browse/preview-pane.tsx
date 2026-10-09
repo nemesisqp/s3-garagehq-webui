@@ -1,11 +1,14 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   Download,
   ExternalLink,
+  FileImage,
   Loader2,
+  Maximize2,
   MousePointerClick,
   PanelRightClose,
   PencilLine,
+  PictureInPicture2,
   Share2,
   Trash,
   X,
@@ -15,7 +18,14 @@ import { API_URL } from "@/lib/api";
 import { cn, dayjs, readableBytes } from "@/lib/utils";
 import { useBucketContext } from "../context";
 import { useBrowseContext } from "./browse-context";
-import { keyName, objectPath, PreviewKind, previewKind } from "./browse-utils";
+import {
+  IMAGE_PREVIEW_MAX_SIZE,
+  keyName,
+  objectPath,
+  PreviewKind,
+  previewKind,
+  TEXT_PREVIEW_BYTES,
+} from "./browse-utils";
 import FileTypeIcon from "./file-type-icon";
 import { useObjectInfo, useTextPreview } from "./hooks";
 import { shareDialog } from "./share-dialog";
@@ -40,7 +50,7 @@ const PreviewPane = ({ objectKey, floating, onClose }: Props) => {
   // a file that was overwritten gets a fresh URL instead of the old copy.
   const etag = info.data?.ETag?.replace(/"/g, "");
   const viewUrl = url + "?view=1" + (etag ? `&v=${encodeURIComponent(etag)}` : "");
-  const kind = previewKind(name, info.data?.ContentType, size);
+  const kind = previewKind(name, info.data?.ContentType);
 
   return (
     <aside
@@ -56,15 +66,28 @@ const PreviewPane = ({ objectKey, floating, onClose }: Props) => {
         <p className="min-w-0 flex-1 truncate text-sm font-medium" title={name}>
           {objectKey ? name : "Details"}
         </p>
-        <Button
-          variant="ghost"
-          size="icon"
-          className="h-8 w-8"
-          icon={floating ? X : PanelRightClose}
-          aria-label={floating ? "Close details" : "Hide details"}
-          title={floating ? "Close" : "Hide details"}
-          onClick={onClose}
-        />
+        <div className="flex items-center gap-1">
+          {objectKey ? (
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8 text-muted-foreground hover:text-foreground"
+              icon={ExternalLink}
+              title="Open in new tab"
+              aria-label="Open in new tab"
+              onClick={() => window.open(viewUrl, "_blank")}
+            />
+          ) : null}
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-8 w-8"
+            icon={floating ? X : PanelRightClose}
+            aria-label={floating ? "Close details" : "Hide details"}
+            title={floating ? "Close" : "Hide details"}
+            onClick={onClose}
+          />
+        </div>
       </header>
 
       {!objectKey ? (
@@ -74,7 +97,12 @@ const PreviewPane = ({ objectKey, floating, onClose }: Props) => {
         </div>
       ) : (
         <div className="min-h-0 flex-1 overflow-y-auto">
-          <div className="flex h-64 items-center justify-center border-b bg-muted/30 p-3">
+          <div
+            className={cn(
+              "flex items-center justify-center border-b bg-muted/30 p-3",
+              kind === "video" ? "min-h-56 max-h-[380px] p-2" : "h-64"
+            )}
+          >
             {info.isLoading ? (
               <Loader2 size={24} className="animate-spin text-muted-foreground" />
             ) : (
@@ -82,6 +110,7 @@ const PreviewPane = ({ objectKey, floating, onClose }: Props) => {
                 kind={info.error ? "none" : kind}
                 url={viewUrl}
                 name={name}
+                size={size}
                 etag={info.data?.ETag}
               />
             )}
@@ -173,14 +202,19 @@ type PreviewContentProps = {
   kind: PreviewKind;
   url: string;
   name: string;
+  size?: number | null;
   etag?: string;
 };
 
-const PreviewContent = ({ kind, url, name, etag }: PreviewContentProps) => {
+const PreviewContent = ({ kind, url, name, size, etag }: PreviewContentProps) => {
   const [failed, setFailed] = useState(false);
+  const [forceLoadImage, setForceLoadImage] = useState(false);
   const text = useTextPreview(kind === "text" ? url : null, etag);
 
-  useEffect(() => setFailed(false), [url]);
+  useEffect(() => {
+    setFailed(false);
+    setForceLoadImage(false);
+  }, [url]);
 
   const icon = (
     <FileTypeIcon name={name} size={72} strokeWidth={1.25} className="text-muted-foreground" />
@@ -189,6 +223,40 @@ const PreviewContent = ({ kind, url, name, etag }: PreviewContentProps) => {
 
   switch (kind) {
     case "image":
+      if (size != null && size >= IMAGE_PREVIEW_MAX_SIZE && !forceLoadImage) {
+        return (
+          <div className="flex flex-col items-center justify-center gap-2 p-4 text-center">
+            <FileImage size={56} strokeWidth={1.25} className="text-muted-foreground/80" />
+            <div className="space-y-0.5">
+              <p className="text-xs font-medium text-foreground">
+                Image is larger than 3 MB
+              </p>
+              <p className="text-[11px] text-muted-foreground">
+                {readableBytes(size)} · Preview skipped to save memory
+              </p>
+            </div>
+            <div className="flex items-center gap-2 pt-1">
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-7 text-xs"
+                onClick={() => setForceLoadImage(true)}
+              >
+                Load preview
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-7 text-xs"
+                icon={ExternalLink}
+                onClick={() => window.open(url, "_blank")}
+              >
+                Open in tab
+              </Button>
+            </div>
+          </div>
+        );
+      }
       return (
         <img
           src={url}
@@ -198,17 +266,15 @@ const PreviewContent = ({ kind, url, name, etag }: PreviewContentProps) => {
         />
       );
     case "video":
-      return (
-        <video
-          src={url}
-          controls
-          className="max-h-full max-w-full"
-          onError={() => setFailed(true)}
-        />
-      );
+      return <VideoPreview url={url} name={name} onFailed={() => setFailed(true)} />;
     case "audio":
       return (
-        <audio src={url} controls className="w-full" onError={() => setFailed(true)} />
+        <audio
+          src={url}
+          controls
+          className="w-full rounded-full dark:[filter:invert(1)_hue-rotate(180deg)]"
+          onError={() => setFailed(true)}
+        />
       );
     case "pdf":
       return <iframe src={url} title={name} className="h-full w-full rounded border bg-white" />;
@@ -218,11 +284,93 @@ const PreviewContent = ({ kind, url, name, etag }: PreviewContentProps) => {
       }
       if (text.error) return icon;
       return (
-        <pre className="h-full w-full overflow-auto whitespace-pre-wrap break-words rounded bg-background p-2 text-xs">
-          {text.data}
-        </pre>
+        <div className="flex h-full w-full flex-col overflow-hidden rounded border bg-background">
+          {text.data?.truncated ? (
+            <div className="flex shrink-0 items-center justify-between border-b bg-muted/60 px-2.5 py-1 text-[11px] text-muted-foreground">
+              <span>Showing first {readableBytes(TEXT_PREVIEW_BYTES)} preview</span>
+              <span className="font-mono text-[10px]">truncated</span>
+            </div>
+          ) : null}
+          <pre className="flex-1 overflow-auto whitespace-pre-wrap break-words p-2 font-mono text-xs select-text">
+            {text.data?.text}
+          </pre>
+        </div>
       );
   }
+};
+
+const VideoPreview = ({
+  url,
+  name,
+  onFailed,
+}: {
+  url: string;
+  name: string;
+  onFailed: () => void;
+}) => {
+  const videoRef = useRef<HTMLVideoElement>(null);
+
+  const toggleFullscreen = () => {
+    if (!videoRef.current) return;
+    if (document.fullscreenElement) {
+      document.exitFullscreen().catch(() => {});
+    } else {
+      videoRef.current.requestFullscreen().catch(() => {});
+    }
+  };
+
+  const togglePip = () => {
+    if (!videoRef.current) return;
+    if (document.pictureInPictureElement) {
+      document.exitPictureInPicture().catch(() => {});
+    } else if (document.pictureInPictureEnabled) {
+      videoRef.current.requestPictureInPicture().catch(() => {});
+    }
+  };
+
+  return (
+    <div className="group relative flex w-full max-h-full items-center justify-center overflow-hidden rounded-md bg-black">
+      <video
+        ref={videoRef}
+        src={url}
+        title={name}
+        aria-label={name}
+        controls
+        playsInline
+        preload="metadata"
+        className="max-h-[350px] w-full object-contain"
+        onError={onFailed}
+      />
+      <div className="absolute right-2 top-2 z-10 flex items-center gap-1 rounded-md bg-black/70 p-1 opacity-0 backdrop-blur-sm transition-opacity group-hover:opacity-100">
+        {"pictureInPictureEnabled" in document && (
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-7 w-7 text-white/90 hover:bg-white/20 hover:text-white"
+            icon={PictureInPicture2}
+            title="Picture in Picture"
+            onClick={togglePip}
+          />
+        )}
+        <Button
+          variant="ghost"
+          size="icon"
+          className="h-7 w-7 text-white/90 hover:bg-white/20 hover:text-white"
+          icon={Maximize2}
+          title="Fullscreen"
+          onClick={toggleFullscreen}
+        />
+        <Button
+          variant="ghost"
+          size="icon"
+          className="h-7 w-7 text-white/90 hover:bg-white/20 hover:text-white"
+          icon={ExternalLink}
+          title="Open in new tab"
+          onClick={() => window.open(url, "_blank")}
+        />
+      </div>
+    </div>
+  );
 };
 
 export default PreviewPane;

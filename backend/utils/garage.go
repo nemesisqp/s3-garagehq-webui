@@ -75,6 +75,26 @@ func (g *garage) GetS3Endpoint() string {
 	return endpoint
 }
 
+// GetPublicS3Endpoint resolves the public-facing S3 endpoint with priority:
+// 1. s3_api.advertise_endpoint from garage.toml
+// 2. s3_api.root_domain from garage.toml (defaulting to https://)
+// 3. Fallback to current GetS3Endpoint() behavior
+func (g *garage) GetPublicS3Endpoint() string {
+	if ep := strings.TrimSpace(g.Config.S3API.AdvertiseEndpoint); ep != "" {
+		if !strings.HasPrefix(ep, "http://") && !strings.HasPrefix(ep, "https://") {
+			ep = "https://" + ep
+		}
+		return strings.TrimRight(ep, "/")
+	}
+
+	if rd := strings.TrimSpace(g.Config.S3API.RootDomain); rd != "" {
+		domain := strings.TrimLeft(rd, ".")
+		return "https://" + domain
+	}
+
+	return g.GetS3Endpoint()
+}
+
 func (g *garage) GetS3Region() string {
 	endpoint := os.Getenv("S3_REGION")
 	if len(endpoint) > 0 {

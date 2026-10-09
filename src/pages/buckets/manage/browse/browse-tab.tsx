@@ -67,10 +67,11 @@ const BrowseTab = () => {
     newParams.set("prefix", prefix);
     setSearchParams(newParams);
     setSelected([]);
+    applySearch.cancel();
     setSearchInput("");
     setSearch("");
     setPreviewKey(null);
-  }, [curPrefix]);
+  }, [curPrefix, applySearch]);
 
   // Esc closes the floating details pane.
   useEffect(() => {
@@ -108,10 +109,12 @@ const BrowseTab = () => {
 
   const onSearchChange = (value: string) => {
     setSearchInput(value);
-    if (!value.trim()) {
+    applySearch.cancel();
+    const trimmed = value.trim();
+    if (trimmed.length < 2) {
       setSearch("");
     } else {
-      applySearch(value.trim());
+      applySearch(trimmed);
     }
   };
 
@@ -167,9 +170,12 @@ const BrowseTab = () => {
     );
   }
 
+  const isPaneOpen = isWide ? !paneCollapsed : !!previewKey;
+
   const browseContext: BrowseContextValue = {
     prefix,
     previewKey,
+    isPaneOpen,
     openFolder: gotoPrefix,
     openPreview,
     openRename: setRenameKey,

@@ -9,7 +9,7 @@ import {
   FileVideo,
   LucideProps,
 } from "lucide-react";
-import { splitExtension } from "./browse-utils";
+import { splitExtension, IMAGE_EXTS } from "./browse-utils";
 
 const ARCHIVE_EXTS = ["zip", "rar", "7z", "iso", "tar", "gz", "bz2", "xz"];
 
@@ -22,7 +22,7 @@ const FileTypeIcon = ({ name, ...props }: { name: string } & LucideProps) => {
     ? FileArchive
     : ext === "pdf"
       ? FileText
-      : type === "image"
+      : type === "image" || IMAGE_EXTS.includes(ext)
         ? FileImage
         : type === "video"
           ? FileVideo

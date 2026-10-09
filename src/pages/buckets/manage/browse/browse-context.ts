@@ -3,6 +3,7 @@ import { createContext, useContext } from "react";
 export type BrowseContextValue = {
   prefix: string;
   previewKey: string | null;
+  isPaneOpen: boolean;
   openFolder: (prefix: string) => void;
   openPreview: (key: string) => void;
   openRename: (key: string) => void;
